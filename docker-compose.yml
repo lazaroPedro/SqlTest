@@ -1,0 +1,109 @@
+version: "3.9"
+
+networks:
+  benchmark-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+
+  # ── 1. PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: benchmark-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       benchmark
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - benchmark-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d benchmark"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── 2. API Python / FastAPI ───────────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: benchmark-api
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: benchmark
+      DB_USER: postgres
+      DB_PASS: postgres
+    ports:
+      - "8000:8000"
+    networks:
+      - benchmark-net
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── 3. Postgres Exporter ──────────────────────────────────────────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: benchmark-pg-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://monitor:monitor_pass@db:5432/benchmark?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - benchmark-net
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── 4. Prometheus ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: benchmark-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    ports:
+      - "9090:9090"
+    networks:
+      - benchmark-net
+    depends_on:
+      - api
+      - postgres-exporter
+
+  # ── 5. Grafana ────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: benchmark-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - benchmark-net
+    depends_on:
+      - prometheus
