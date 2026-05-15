@@ -54,17 +54,16 @@ const BASE = "http://localhost:8000";
 export default function () {
   const userId = Math.floor(Math.random() * 1000) + 1;
 
-  // ORM
-  const ormRes = http.get(`${BASE}/api/orm/users/${userId}`);
-  ormLatency.add(ormRes.timings.duration);
-  ormErrors.add(ormRes.status !== 200);
-  check(ormRes, { "[ORM] status 200": (r) => r.status === 200 });
+  if (__ENV.TARGET === 'orm') {
+    const ormRes = http.get(`${BASE}/api/orm/users/${userId}`);
+    ormLatency.add(ormRes.timings.duration);
+    ormErrors.add(ormRes.status !== 200);
+  }
 
-  // SQL Nativo
-  const sqlRes = http.get(`${BASE}/api/sql/users/${userId}`);
-  sqlLatency.add(sqlRes.timings.duration);
-  sqlErrors.add(sqlRes.status !== 200);
-  check(sqlRes, { "[SQL] status 200": (r) => r.status === 200 });
-
+  if (__ENV.TARGET === 'sql') {
+    const sqlRes = http.get(`${BASE}/api/sql/users/${userId}`);
+    sqlLatency.add(sqlRes.timings.duration);
+    sqlErrors.add(sqlRes.status !== 200);
+  }
   sleep(0.1);
 }

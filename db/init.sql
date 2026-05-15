@@ -53,44 +53,57 @@ CREATE INDEX IF NOT EXISTS idx_products_category_id   ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_users_email            ON users(email);
 
 -- ── Seed ───────────────────────────────────────────────────────────────────────
-
+-- 1. Categorias (Base fixa)
 INSERT INTO categories (name) VALUES
-    ('Eletrônicos'), ('Vestuário'), ('Livros'), ('Alimentos'), ('Esportes')
+    ('Eletrônicos'), ('Vestuário'), ('Livros'), ('Alimentos'), ('Esportes'),
+    ('Casa e Jardim'), ('Automotivo'), ('Beleza'), ('Brinquedos'), ('Papelaria')
 ON CONFLICT DO NOTHING;
 
--- 1 000 usuários
+-- 2. Usuários: 50.000 registros
+
 INSERT INTO users (name, email)
-SELECT 'Usuário ' || i, 'user' || i || '@benchmark.com'
-FROM generate_series(1, 1000) i
+SELECT 
+    'Usuário ' || i, 
+    'user' || i || '@benchmark.com'
+FROM generate_series(1, 50000) i
 ON CONFLICT DO NOTHING;
 
--- 500 produtos
+-- 3. Produtos: 20.000 registros
+-- Com 20k produtos, as buscas por ID e filtros começam a testar os índices.
 INSERT INTO products (name, price, stock, category_id)
 SELECT
     'Produto ' || i,
     round((random() * 990 + 10)::NUMERIC, 2),
-    (random() * 500)::INTEGER,
-    (floor(random() * 5) + 1)::INTEGER
-FROM generate_series(1, 500) i;
+    (random() * 1000)::INTEGER,
+    (floor(random() * 10) + 1)::INTEGER -- Ajustado para 10 categorias
+FROM generate_series(1, 20000) i;
 
--- 2 000 pedidos
+-- 4. Pedidos: 200.000 registros
+-- Essencial para testar buscas complexas e relatórios.
 INSERT INTO orders (user_id, total, status)
 SELECT
-    (floor(random() * 1000) + 1)::INTEGER,
+    (floor(random() * 50000) + 1)::INTEGER,
     round((random() * 5000 + 50)::NUMERIC, 2),
     (ARRAY['pending','confirmed','shipped','delivered','cancelled'])[floor(random()*5+1)]
-FROM generate_series(1, 2000) i;
+FROM generate_series(1, 200000) i;
 
--- 6 000 itens de pedido (~3 por pedido)
+-- 5. Itens de Pedido: 1.000.000 de registros (O "Coração" do Teste)
+-- Aqui é onde o ORM sofre. Se você fizer um JOIN sem cuidado, o overhead será gigante.
 INSERT INTO order_items (order_id, product_id, quantity, unit_price)
 SELECT
-    (floor(random() * 2000) + 1)::INTEGER,
-    (floor(random() * 500)  + 1)::INTEGER,
-    (floor(random() * 5)    + 1)::INTEGER,
+    (floor(random() * 200000) + 1)::INTEGER,
+    (floor(random() * 20000)  + 1)::INTEGER,
+    (floor(random() * 10)    + 1)::INTEGER,
     round((random() * 990 + 10)::NUMERIC, 2)
-FROM generate_series(1, 6000) i;
+FROM generate_series(1, 1000000) i;
 
--- ── Usuário de monitoramento para o postgres_exporter ─────────────────────────
+-- Manutenção de Índices (Garanta que as estatísticas estejam prontas para o k6)
+ANALYZE users;
+ANALYZE products;
+ANALYZE orders;
+ANALYZE order_items;
+
+-- ─ ─ Usuário de monitoramento para o postgres_exporter ─────────────────────────
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'monitor') THEN

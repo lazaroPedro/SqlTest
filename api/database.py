@@ -23,7 +23,7 @@ DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 engine = create_engine(
     DATABASE_URL,
     pool_size=20,
-    max_overflow=40,
+    max_overflow=180,
     pool_pre_ping=True,
     echo=False,   # True → imprime o SQL gerado pelo ORM no terminal
 )
@@ -51,8 +51,8 @@ def get_pg_pool() -> pg_pool.ThreadedConnectionPool:
     global _pg_pool
     if _pg_pool is None:
         _pg_pool = pg_pool.ThreadedConnectionPool(
-            minconn=5,
-            maxconn=60,
+            minconn=20,
+            maxconn=200,
             host=DB_HOST,
             port=int(DB_PORT),
             dbname=DB_NAME,

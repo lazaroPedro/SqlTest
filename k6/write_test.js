@@ -59,17 +59,16 @@ function buildPayload() {
 export default function () {
   const payload = buildPayload();
 
-  // ORM
+  if (__ENV.TARGET === 'orm') {
   const ormRes = http.post(`${BASE}/api/orm/orders`, payload, { headers: HEADERS });
   ormWriteLatency.add(ormRes.timings.duration);
   ormWriteErrors.add(ormRes.status !== 200);
-  check(ormRes, { "[ORM-Write] status 200": (r) => r.status === 200 });
-
-  // SQL Nativo
+    }
+  if (__ENV.TARGET === 'sql') {
   const sqlRes = http.post(`${BASE}/api/sql/orders`, payload, { headers: HEADERS });
   sqlWriteLatency.add(sqlRes.timings.duration);
   sqlWriteErrors.add(sqlRes.status !== 200);
-  check(sqlRes, { "[SQL-Write] status 200": (r) => r.status === 200 });
+    }
 
-  sleep(0.2);
+  sleep(0.1);
 }

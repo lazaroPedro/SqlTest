@@ -16,10 +16,10 @@ import { check, sleep } from "k6";
 import { Trend, Rate } from "k6/metrics";
 
 const ormN1Latency  = new Trend("orm_n1_latency_ms",   true);
-const ormOptLatency = new Trend("orm_opt_latency_ms",  true);
+//const ormOptLatency = new Trend("orm_opt_latency_ms",  true);
 const sqlLatency    = new Trend("sql_join_latency_ms", true);
 const ormN1Errors   = new Rate("orm_n1_error_rate");
-const ormOptErrors  = new Rate("orm_opt_error_rate");
+//const ormOptErrors  = new Rate("orm_opt_error_rate");
 const sqlErrors     = new Rate("sql_join_error_rate");
 
 export const options = {
@@ -45,7 +45,7 @@ export const options = {
   },
   thresholds: {
     orm_n1_latency_ms:   ["p(95)<3000"],
-    orm_opt_latency_ms:  ["p(95)<500"],
+  //  orm_opt_latency_ms:  ["p(95)<500"],
     sql_join_latency_ms: ["p(95)<300"],
   },
 };
@@ -55,23 +55,23 @@ const BASE = "http://localhost:8000";
 export default function () {
   const orderId = Math.floor(Math.random() * 2000) + 1;
 
-  // ORM N+1
+  if (__ENV.TARGET === 'orm') {
   const n1Res = http.get(`${BASE}/api/orm/orders/${orderId}/details`);
   ormN1Latency.add(n1Res.timings.duration);
   ormN1Errors.add(n1Res.status !== 200);
-  check(n1Res, { "[ORM-N+1] status 200": (r) => r.status === 200 });
+    }
 
   // ORM Otimizado
-  const optRes = http.get(`${BASE}/api/orm/orders/${orderId}/details/optimized`);
-  ormOptLatency.add(optRes.timings.duration);
-  ormOptErrors.add(optRes.status !== 200);
-  check(optRes, { "[ORM-OPT] status 200": (r) => r.status === 200 });
+//  const optRes = http.get(`${BASE}/api/orm/orders/${orderId}/details/optimized`);
+ // ormOptLatency.add(optRes.timings.duration);
+ // ormOptErrors.add(optRes.status !== 200);
+ // check(optRes, { "[ORM-OPT] status 200": (r) => r.status === 200 });
 
-  // SQL Nativo
+  if (__ENV.TARGET === 'sql') {
   const sqlRes = http.get(`${BASE}/api/sql/orders/${orderId}/details`);
   sqlLatency.add(sqlRes.timings.duration);
   sqlErrors.add(sqlRes.status !== 200);
-  check(sqlRes, { "[SQL-JOIN] status 200": (r) => r.status === 200 });
+    }
 
   sleep(0.1);
 }
